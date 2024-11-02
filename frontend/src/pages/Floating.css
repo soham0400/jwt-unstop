@@ -1,0 +1,50 @@
+.floating-background {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: teal; 
+}
+
+.floating-squares {
+  list-style: none;
+}
+
+.floating-squares .square {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  opacity: 0.7;
+  animation: float 8s infinite ease-in-out;
+}
+
+/* Positioning each square with staggered delays and varying animation durations */
+.floating-squares .square:nth-child(1) { top: 100%; left: 20%; animation-delay: 0s; animation-duration: 7s; }
+.floating-squares .square:nth-child(2) { top: 100%; left: 70%; animation-delay: 0.5s; animation-duration: 8s; }
+.floating-squares .square:nth-child(3) { top: 100%; left: 40%; animation-delay: 1s; animation-duration: 7.5s; }
+.floating-squares .square:nth-child(4) { top: 100%; left: 10%; animation-delay: 1.5s; animation-duration: 8.5s; }
+.floating-squares .square:nth-child(5) { top: 100%; left: 50%; animation-delay: 2s; animation-duration: 7.8s; }
+.floating-squares .square:nth-child(6) { top: 100%; left: 80%; animation-delay: 0.3s; animation-duration: 8.2s; }
+.floating-squares .square:nth-child(7) { top: 100%; left: 30%; animation-delay: 0.8s; animation-duration: 7.9s; }
+.floating-squares .square:nth-child(8) { top: 100%; left: 90%; animation-delay: 1.2s; animation-duration: 8.1s; }
+.floating-squares .square:nth-child(9) { top: 100%; left: 60%; animation-delay: 1.6s; animation-duration: 7.3s; }
+.floating-squares .square:nth-child(10) { top: 100%; left: 10%; animation-delay: 0.2s; animation-duration: 8.4s; }
+.floating-squares .square:nth-child(11) { top: 100%; left: 80%; animation-delay: 0.7s; animation-duration: 7.6s; }
+.floating-squares .square:nth-child(12) { top: 100%; left: 85%; animation-delay: 1.3s; animation-duration: 8.0s; }
+.floating-squares .square:nth-child(13) { top: 100%; left: 5%; animation-delay: 1.9s; animation-duration: 7.4s; }
+.floating-squares .square:nth-child(14) { top: 100%; left: 8%; animation-delay: 0.4s; animation-duration: 7.7s; }
+.floating-squares .square:nth-child(15) { top: 100%; left: 20%; animation-delay: 0.9s; animation-duration: 8.6s; }
+
+
+/* Keyframes for upward floating effect */
+@keyframes float {
+  0% {
+    transform: translateY(0) rotate(0deg) translateX(0px);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-100vh) rotate(720deg) translateX(20px); /* Continue to spiral up */
+    opacity: 0.4; /* Fades out smoothly */
+  }
+}
