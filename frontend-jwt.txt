@@ -1,0 +1,631 @@
+frontend folder
+App.js
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { useState } from 'react';
+import './App.css';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+import Home from './pages/Home';
+import Profile from './pages/Profile';
+import About from './pages/About';
+import RefreshHandler from './RefreshHandler';
+
+function App() {
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    
+    const PrivateRoute = ({ element }) => {
+        return isAuthenticated ? element : <Navigate to="/Login" />;
+    };
+
+    return (
+        <div className="App">
+            <RefreshHandler setIsAuthenticated={setIsAuthenticated} />
+            <Routes>
+                <Route path="/" element={<Navigate to="/Login" />} />
+                <Route path="/Login" element={<Login />} />
+                <Route path="/Signup" element={<Signup />} />
+                <Route path="/Home" element={<PrivateRoute element={<Home />} />} />
+                <Route path="/Profile" element={<PrivateRoute element={<Profile />} />} />
+                <Route path="/About" element={<PrivateRoute element={<About />} />} />
+            </Routes>
+        </div>
+    );
+}
+
+export default App;
+
+index.js
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+import reportWebVitals from './reportWebVitals';
+import { BrowserRouter } from 'react-router-dom';
+import 'react-toastify/ReactToastify.css'
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>\
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </React.StrictMode>
+);
+
+// If you want to start measuring performance in your app, pass a function
+// to log results (for example: reportWebVitals(console.log))
+// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+reportWebVitals();
+
+RefreshHandler.js
+import React, { useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+
+function RefreshHandler({ setIsAuthenticated }) {
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        
+        if (token) {
+            setIsAuthenticated(true);
+            if (location.pathname === '/' || location.pathname === '/Login' || location.pathname === '/Signup') {
+                navigate('/Home', { replace: true });
+            }
+        } else {
+            setIsAuthenticated(false);
+            if (location.pathname !== '/Login' && location.pathname !== '/Signup') {
+                navigate('/Login', { replace: true });
+            }
+        }
+    }, [location, navigate, setIsAuthenticated]);
+
+    return null;
+}
+
+export default RefreshHandler;
+
+utils.js
+import { toast } from 'react-toastify';
+
+export const handleSuccess = (msg) => {
+    toast.success(msg, {
+        position: 'top-right'
+    })
+}
+
+export const handleError = (msg) => {
+    toast.error(msg, {
+        position: 'top-right'
+    })
+}
+
+pages
+About.js
+import React from 'react'
+
+function About() {
+  return (
+    <div>
+      <h1>Hello World</h1>
+    </div>
+  )
+}
+
+export default About
+
+Home.js
+import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom';
+import { handleError, handleSuccess } from '../utils';
+import { ToastContainer } from 'react-toastify';
+
+function Home() {
+    const [loggedInUser, setLoggedInUser] = useState('');
+    const [products, setProducts] = useState('')
+    const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
+    useEffect(() => {
+        setLoggedInUser(localStorage.getItem('loggedInUser'))
+    }, [])
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('loggedInUser');
+        handleSuccess('User Loggedout');
+        setTimeout(() => {
+            navigate('/Login');
+        }, 1000)
+    }
+
+    const fetchProducts = async ()=>{
+        try{
+            const url = `http://localhost:8080/data`
+            const headers = {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            }
+            const response = await fetch(url, headers);
+            const result = await response.json()
+            console.log("Fetch result:", result)
+            setProducts(result);
+            handleSuccess('Successfully fetched data')
+            setLoading(false);
+        }catch(err){
+            handleError(err);
+        }
+    }
+    useEffect(() => {
+        fetchProducts();
+    }, [])
+
+    if (loading) {
+        return <div>Loading...</div>
+    }
+
+    return (
+        <div>
+            <h1>Welcome {loggedInUser}</h1>
+            <button onClick={handleLogout}>Logout</button>
+            <button onClick={() => navigate('/Profile')}>Profile</button>
+            <button onClick={() => navigate('/About')}>About</button>
+            <div>
+                {
+                    products && products?.map((item, index) => (
+                        <ul key={index}>
+                            <span>{item.name} : {item.price}</span>
+                        </ul>
+                    ))
+                }
+            </div>
+            <ToastContainer />
+        </div>
+    )
+}
+
+export default Home
+
+Login.js
+import React, { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ToastContainer } from 'react-toastify';
+import { handleError, handleSuccess } from '../utils';
+
+function Login() {
+
+    const [loginInfo, setLoginInfo] = useState({
+        email: '',
+        password: ''
+    })
+
+    const navigate = useNavigate();
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        console.log(name, value);
+        const copyLoginInfo = { ...loginInfo };
+        copyLoginInfo[name] = value;
+        setLoginInfo(copyLoginInfo);
+    }
+
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        const { email, password } = loginInfo;
+        if (!email || !password) {
+            return handleError('email and password are required')
+        }
+        try {
+            const url = `http://localhost:8080/auth/login`;
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(loginInfo)
+            });
+            const result = await response.json();
+            console.log(result)
+            const { success, message, jwtToken, name, error } = result;
+            if (success) {
+                handleSuccess(message);
+                localStorage.setItem('token', jwtToken);
+                localStorage.setItem('loggedInUser', name);
+                setTimeout(() => {
+                    navigate('/Home')
+                }, 1000)
+            } else if (error) {
+                const details = error?.details[0].message;
+                handleError(details);
+            } else if (!success) {
+                handleError(message);
+            }
+            console.log(result);
+        } catch (err) {
+            handleError(err);
+        }
+    }
+
+    return (
+        <div className='container'>
+            <h1>Login</h1>
+            <form onSubmit={handleLogin}>
+                <div>
+                    <label htmlFor='email'>Email</label>
+                    <input
+                        onChange={handleChange}
+                        type='email'
+                        name='email'
+                        placeholder='Enter your email...'
+                        value={loginInfo.email}
+                    />
+                </div>
+                <div>
+                    <label htmlFor='password'>Password</label>
+                    <input
+                        onChange={handleChange}
+                        type='password'
+                        name='password'
+                        placeholder='Enter your password...'
+                        value={loginInfo.password}
+                    />
+                </div>
+                <button type='submit'>Login</button>
+                <span>Don't have an account ?
+                    <Link to="/Signup">Signup</Link>
+                </span>
+            </form>
+            <ToastContainer />
+        </div>
+    )
+}
+
+export default Login
+
+Signup.js
+import React, { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ToastContainer } from 'react-toastify';
+import { handleError, handleSuccess } from '../utils';
+
+function Signup() {
+
+    const [signupInfo, setSignupInfo] = useState({
+        fullName: '',
+        username: '',
+        email: '',
+        password: '',
+        phone: '',
+        age: '',
+        gender: '',
+        dateOfBirth: '',
+        collegeName: ''
+    })
+
+    const navigate = useNavigate();
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        console.log(name, value);
+        const copySignupInfo = { ...signupInfo };
+        copySignupInfo[name] = value;
+        setSignupInfo(copySignupInfo);
+    }
+
+    const handleSignup = async (e) => {
+        e.preventDefault();
+        const { username, email, password } = signupInfo;
+        if (!username || !email || !password) {
+             return handleError('name, email and password are required')
+        }
+        try {
+            const url = `http://localhost:8080/auth/signup`;
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(signupInfo)
+            });
+            const result = await response.json();
+            const { success, message, jwtToken, name, error } = result;
+            if (success) {
+                handleSuccess(message);
+                localStorage.setItem('token', jwtToken);
+                localStorage.setItem('loggedInUser', name);
+                setTimeout(() => {
+                    navigate('/Home')
+                }, 1000)
+            } else if (error) {
+                const details = error?.details[0].message;
+                handleError(details);
+            } else if (!success) {
+                handleError(message);
+            }
+            console.log(result)
+        } catch (err) {
+             handleError(err);
+        }
+    }
+    return (
+        <div className='container'>
+            <h1>Signup</h1>
+            <form onSubmit={handleSignup}>
+                <div>
+                    <label htmlFor='fullName'>Full Name</label>
+                    <input
+                        id='fullName'
+                        onChange={handleChange}
+                        type='text'
+                        name='fullName'
+                        autoFocus
+                        placeholder='Enter your full name...'
+                        value={signupInfo.fullName}
+                        required
+                    />
+                </div>
+                <div>
+                    <label htmlFor='username'>Username</label>
+                    <input
+                        id='username'
+                        onChange={handleChange}
+                        type='text'
+                        name='username'
+                        placeholder='Choose a username...'
+                        value={signupInfo.username}
+                        required
+                    />
+                </div>
+                <div>
+                    <label htmlFor='email'>Email</label>
+                    <input
+                        onChange={handleChange}
+                        type='email'
+                        name='email'
+                        placeholder='Enter your email...'
+                        value={signupInfo.email}
+                        required
+                    />
+                </div>
+                <div>
+                    <label htmlFor='password'>Password</label>
+                    <input
+                        onChange={handleChange}
+                        type='password'
+                        name='password'
+                        placeholder='Enter your password...'
+                        value={signupInfo.password}
+                        required
+                    />
+                </div>
+                <div>
+                    <label htmlFor='phone'>Phone Number</label>
+                    <input
+                        id='phone'
+                        onChange={handleChange}
+                        type='tel'
+                        name='phone'
+                        placeholder='Enter 10 digit phone number'
+                        value={signupInfo.phone}
+                        pattern='[0-9]{10}'
+                        title='Please enter exactly 10 digits'
+                        required
+                    />
+                </div>
+                <div>
+                    <label htmlFor='age'>Age</label>
+                    <input
+                        id='age'
+                        onChange={handleChange}
+                        type='number'
+                        name='age'
+                        min='16'
+                        max='100'
+                        placeholder='Enter your age'
+                        value={signupInfo.age}
+                        required
+                    />
+                </div>
+                <div>
+                    <label htmlFor='gender'>Gender</label>
+                    <select
+                        id='gender'
+                        name='gender'
+                        onChange={handleChange}
+                        value={signupInfo.gender}
+                        required
+                    >
+                        <option value=''>Select Gender</option>
+                        <option value='male'>Male</option>
+                        <option value='female'>Female</option>
+                        <option value='other'>Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label htmlFor='dateOfBirth'>Date of Birth</label>
+                    <input
+                        id='dateOfBirth'
+                        onChange={handleChange}
+                        type='date'
+                        name='dateOfBirth'
+                        value={signupInfo.dateOfBirth}
+                        max={new Date().toISOString().split('T')[0]}
+                        required
+                    />
+                </div>
+                <div>
+                    <label htmlFor='collegeName'>College Name</label>
+                    <input
+                        id='collegeName'
+                        onChange={handleChange}
+                        type='text'
+                        name='collegeName'
+                        placeholder='Enter your college name'
+                        value={signupInfo.collegeName}
+                        required
+                    />
+                </div>
+                <button type='submit'>Signup</button>
+                <span>Already have an account ?
+                    <Link to="/Login">Login</Link>
+                </span>
+            </form>
+            <ToastContainer />
+        </div>
+    )
+}
+
+export default Signup
+
+Profile.js
+// frontend/pages/Profile.js
+import React, { useEffect, useState } from 'react';
+import { handleError, handleSuccess } from '../utils';
+import { ToastContainer } from 'react-toastify';
+
+function Profile() {
+    const [userData, setUserData] = useState(null);
+    const [isEditing, setIsEditing] = useState({});
+    const [loading, setLoading] = useState(true);
+
+    // Fetch profile data
+    const fetchUserProfile = async () => {
+        try {
+            const response = await fetch(`http://localhost:8080/data/profile`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+            const result = await response.json();
+            if (result.success) {
+                setUserData(result.user);
+                handleSuccess('Profile data loaded successfully');
+            } else {
+                handleError(result.message);
+            }
+            setLoading(false);
+        } catch (error) {
+            handleError('Failed to load profile data');
+        }
+    };
+
+    // Toggle edit mode
+    const toggleEdit = (field) => {
+        setIsEditing((prevState) => ({ ...prevState, [field]: !prevState[field] }));
+    };
+
+    // Handle field change
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setUserData((prevData) => ({ ...prevData, [name]: value }));
+    };
+
+    // Save updated data
+    const saveChanges = async (field) => {
+        try {
+            const response = await fetch(`http://localhost:8080/data/profile`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ [field]: userData[field] })
+            });
+            const result = await response.json();
+            if (result.success) {
+                setUserData(result.user);
+                handleSuccess('Profile updated successfully');
+            } else {
+                handleError(result.message);
+            }
+        } catch (error) {
+            handleError('Failed to update profile');
+        }
+        toggleEdit(field); // Exit edit mode
+    };
+
+    useEffect(() => {
+        fetchUserProfile();
+    }, []);
+
+    if (loading) {
+        return <div>Loading...</div>;
+    }
+
+    return (
+        <div>
+            <h1>Profile</h1>
+            {userData ? (
+                <div>
+                    {Object.keys(userData).map((field) => (
+                        <div key={field}>
+                            <label><strong>{field.charAt(0).toUpperCase() + field.slice(1)}:</strong></label>
+                            {isEditing[field] ? (
+                                <div>
+                                    <input
+                                        type={field === 'dateOfBirth' ? 'date' : 'text'}
+                                        name={field}
+                                        value={field === 'dateOfBirth' ? new Date(userData[field]).toISOString().split('T')[0] : userData[field]}
+                                        onChange={handleChange}
+                                    />
+                                    <button onClick={() => saveChanges(field)}>Save</button>
+                                    <button onClick={() => toggleEdit(field)}>Cancel</button>
+                                </div>
+                            ) : (
+                                <div>
+                                    <span>
+                                        {field === 'dateOfBirth' ? new Date(userData[field]).toLocaleDateString() : userData[field]}
+                                    </span>
+                                    <button onClick={() => toggleEdit(field)}>&#9998;</button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p>User data not available</p>
+            )}
+            <ToastContainer />
+        </div>
+    );
+}
+
+export default Profile;
+
+geolocation
+function getUserLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                getCityFromCoordinates(latitude, longitude);
+            },
+            (error) => {
+                console.error("Error retrieving location:", error);
+            }
+        );
+    } else {
+        console.error("Geolocation is not supported by this browser.");
+    }
+}
+
+async function getCityFromCoordinates(latitude, longitude) {
+    const apiKey = 'YOUR_OPENCAGE_API_KEY';
+    const url = `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${apiKey}`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.results && data.results.length > 0) {
+            const city = data.results[0].components.city || data.results[0].components.town || data.results[0].components.village;
+            console.log("City:", city);
+            // Update your app state or perform further actions with the city
+        } else {
+            console.error("No results found for the provided coordinates.");
+        }
+    } catch (error) {
+        console.error("Error fetching city:", error);
+    }
+}
+
+// Call this function to start the process
+getUserLocation();

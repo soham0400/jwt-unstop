@@ -1,0 +1,319 @@
+backend folder
+controllers
+authController.js
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const UserModel = require("../models/users");
+
+const signup = async (req,res)=>{
+    try{
+        const { fullName, username, email, password, phone, age, gender, dateOfBirth, collegeName } = req.body;
+        const user = await UserModel.findOne({ email });
+        if(user){
+            return res.status(409)
+                .json({ message : "User already Exists, go to Login", success : false})
+        }
+        const userModel = new UserModel({
+            fullName,
+            username,
+            email,
+            password: await bcrypt.hash(password, 10),
+            phone,
+            age,
+            gender,
+            dateOfBirth,
+            collegeName
+        });
+        await userModel.save();
+        const jwtToken = jwt.sign(
+            { email: userModel.email, _id: userModel._id },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+        res.status(201)
+            .json({ 
+                message : "Signup was successful", 
+                success : true, 
+                jwtToken,
+                email,
+                name: userModel.username
+            })
+    }catch(err){
+        console.log("Signup Error: ", err)
+        res.status(500)
+            .json({ 
+                message : "internal server error", 
+                success : false
+            })
+    }
+}
+
+const login = async (req,res)=>{
+    try{
+        const { email, password } = req.body;
+        const user = await UserModel.findOne({ email });
+        const errorMessage = 'Auth failed, email or password is wrong'
+        if(!user){
+            return res.status(403)
+                .json({ 
+                    message : errorMessage, 
+                    success : false
+                })
+        }
+        const isPassEqual = await bcrypt.compare(password, user.password)
+        if(!isPassEqual){
+            return res.status(403)
+                .json({ 
+                    message : errorMessage, 
+                    success : false
+                })
+        }
+        const jwtToken = jwt.sign(
+            { email: user.email, _id:user._id },
+            process.env.JWT_SECRET,
+            {expiresIn: '24h'}
+        )
+        res.status(200)
+            .json({ 
+                message : "Login was successful", 
+                success : true,
+                jwtToken,
+                email,
+                name: user.username
+            })
+    }catch(err){
+        res.status(500)
+            .json({ message : "internal server error", success : false})
+    }
+}
+
+module.exports = {
+    signup,
+    login
+}
+userController.js
+const UserModel = require('../models/users');
+
+const getProfile = async (req, res) => {
+    try {
+        const userId = req.user._id;  // Extracted from JWT
+        const user = await UserModel.findById(userId).select('-password -__v'); // Exclude password field
+        if (!user) {
+            return res.status(404).json({ message: 'User not found', success: false });
+        }
+        res.status(200).json({ success: true, user });
+    } catch (error) {
+        res.status(500).json({ message: 'Internal server error', success: false });
+    }
+};
+
+const updateProfile = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const updates = req.body;
+
+        const updatedUser = await UserModel.findByIdAndUpdate(userId, updates, { new: true }).select('-password -__v');
+        if (!updatedUser) {
+            return res.status(404).json({ message: 'User not found', success: false });
+        }
+        res.status(200).json({ success: true, user: updatedUser });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to update profile', success: false });
+    }
+};
+
+module.exports = { getProfile, updateProfile };
+
+middlewares
+dataauth.js
+const jwt = require('jsonwebtoken')
+
+const ensureAuthenticated = (req,res,next)=>{
+    const auth = req.headers['authorization']
+    if(!auth || !auth.startsWith('Bearer ')){
+        return res.status(403)
+            .json({ message: "Unauthorized, JWT token is required"})
+    }
+    const token = auth.split(' ')[1];
+    try{
+        const decoded = jwt.verify(token, process.env.JWT_SECRET)
+        console.log("Decoded token:", decoded)
+        req.user = decoded
+        next()
+    }catch(err){
+        return res.status(403)
+            .json({ message: "Unauthorized, JWT token is wrong or expired"})
+    }
+}
+
+module.exports = ensureAuthenticated
+
+validation.js
+const joi = require('joi')
+
+const signupValidation = (req,res,next)=>{
+    const schema = joi.object({
+        fullName: joi.string().min(3).max(50).required(),
+        username: joi.string().alphanum().min(3).max(30).required(),
+        email: joi.string().email().required(),
+        password: joi.string().min(4).max(15).required(),
+        phone: joi.string().pattern(/^[0-9]{10}$/).required(),
+        age: joi.number().integer().min(16).max(100).required(),
+        gender: joi.string().valid('male', 'female', 'other').required(),
+        dateOfBirth: joi.date().max('now').required(),
+        collegeName: joi.string().min(3).max(100).required()
+    });
+    const {error} = schema.validate(req.body);
+    if(error){
+        return res.status(400).json({message : "Bad Request", error})
+    }
+    next()
+}
+
+const loginValidation = (req,res,next)=>{
+    const schema = joi.object({
+        email: joi.string().email().required(),
+        password: joi.string().min(4).max(15).required()
+    });
+    const {error} = schema.validate(req.body);
+    if(error){
+        return res.status(400).json({message : "Bad Request", error})
+    }
+    next()
+}
+
+module.exports = {
+    signupValidation,
+    loginValidation
+}
+
+models
+db.js
+const mongoose = require('mongoose')
+
+const mongo_url = "mongodb+srv://sohamaparekh:08hscnYqUgSvtAXc@cluster0.wrssb.mongodb.net/auth-db?retryWrites=true&w=majority&appName=Cluster0"
+
+mongoose.connect(mongo_url)
+    .then(()=>{
+        console.log("MongoBD connected....")
+    }).catch((err)=>{
+        console.log("MongoDB Connection error : ",err)
+    })
+
+users.js
+const mongoose = require('mongoose')
+const Schema = mongoose.Schema
+
+const userSchema = new Schema({
+    fullName: {
+        type: String,
+        required: true,
+    },
+    username: {
+        type: String,
+        required: true,
+        unique: true,
+    },
+    email: {
+        type: String,
+        required: true,
+        unique: true,
+    },
+    password: {
+        type: String,
+        required: true,
+    },
+    phone: {
+        type: String,
+        required: true,
+    },
+    age: {
+        type: Number,
+        required: true,
+    },
+    gender: {
+        type: String,
+        enum: ['male', 'female', 'other'],
+        required: true,
+    },
+    dateOfBirth: {
+        type: Date,
+        required: true,
+    },
+    collegeName: {
+        type: String,
+        required: true,
+    },
+});
+
+const userModel = mongoose.model('users',userSchema)
+module.exports = userModel
+
+routes
+authRouter.js
+const { signup, login } = require('../controllers/authController');
+const { signupValidation, loginValidation } = require('../middlewares/validation');
+
+const router = require('express').Router()
+
+router.post('/login', loginValidation, login)
+router.post('/signup', signupValidation, signup)
+
+module.exports = router
+
+dataRouter.js
+const router = require('express').Router()
+const ensureAuthenticated = require('../middlewares/dataauth')
+const { getProfile, updateProfile } = require('../controllers/userController');
+
+router.get('/', ensureAuthenticated, (req,res)=>{
+    console.log(req.user)
+    try {
+        return res.status(200).json([
+            {
+                name: "mobile",
+                price: 10000
+            },
+            {
+                name: "tv",
+                price: 20000
+            }
+        ])
+    } catch (err) {
+        return res.status(500).json({
+            message: "Internal server error",
+            error: err.message
+        })
+    }
+})
+
+router.get('/profile', ensureAuthenticated, getProfile);
+router.put('/profile', ensureAuthenticated, updateProfile);
+
+module.exports = router
+
+index.js
+const express = require('express');
+const app = express();
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const authRouter = require('./routes/authRouter')
+const dataRouter = require('./routes/dataRouter')
+require('./models/db');
+require('dotenv').config();
+
+const PORT = 8080
+
+app.get('/ping',(req,res)=>{
+    res.send('PONG')
+})
+
+app.use(bodyParser.json())
+app.use(cors())
+app.use('/auth',authRouter)
+app.use('/data',dataRouter)
+
+app.listen(PORT, ()=>{
+    console.log(`Server is running on ${PORT}`)
+})
+
